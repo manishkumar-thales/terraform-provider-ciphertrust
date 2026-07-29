@@ -5,6 +5,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"reflect"
+	"regexp"
 	"slices"
 	"strings"
 
@@ -69,6 +70,12 @@ func (r *resourceCTEClientGroup) Schema(_ context.Context, _ resource.SchemaRequ
 				Required: true,
 				PlanModifiers: []planmodifier.String{
 					stringplanmodifier.RequiresReplace(),
+				},
+				Validators: []validator.String{
+					stringvalidator.RegexMatches(
+						regexp.MustCompile(`^[a-zA-Z][a-zA-Z0-9_-]*$`),
+						"name must start with an alpha character and contain only alphanumeric, underscore (_), or dash (-) characters",
+					),
 				},
 				Description: "Name of the ClientGroup. Changing this value forces the client group to be destroyed and recreated.",
 			},
