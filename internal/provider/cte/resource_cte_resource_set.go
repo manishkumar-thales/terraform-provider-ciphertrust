@@ -160,7 +160,7 @@ func (r *resourceCTEResourceSet) Create(ctx context.Context, req resource.Create
 		payload.Type = "Directory"
 	}
 
-	var resources []CTEResourceJSON
+	resources := []CTEResourceJSON{}
 	for _, resource := range plan.Resources {
 		var resourceJSON CTEResourceJSON
 		if resource.Directory.ValueString() != "" && resource.Directory.ValueString() != types.StringNull().ValueString() {
@@ -299,7 +299,7 @@ func (r *resourceCTEResourceSet) Update(ctx context.Context, req resource.Update
 
 	payload.Description = common.TrimString(plan.Description.String())
 
-	var resources []CTEResourceJSON
+	resources := []CTEResourceJSON{}
 	for _, resource := range plan.Resources {
 		var resourceJSON CTEResourceJSON
 		if resource.Directory.ValueString() != "" && resource.Directory.ValueString() != types.StringNull().ValueString() {
