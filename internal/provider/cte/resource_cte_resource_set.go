@@ -297,7 +297,12 @@ func (r *resourceCTEResourceSet) Update(ctx context.Context, req resource.Update
 		return
 	}
 
-	payload.Description = common.TrimString(plan.Description.String())
+	// Always include description in PATCH body to support clearing it (TFIN-505)
+	if plan.Description.IsNull() {
+		payload.Description = ""
+	} else {
+		payload.Description = plan.Description.ValueString()
+	}
 
 	var resources []CTEResourceJSON
 	for _, resource := range plan.Resources {
@@ -318,11 +323,16 @@ func (r *resourceCTEResourceSet) Update(ctx context.Context, req resource.Update
 	}
 	payload.Resources = resources
 
-	labelsPayload := make(map[string]interface{})
-	for k, v := range plan.Labels.Elements() {
-		labelsPayload[k] = v.(types.String).ValueString()
+	// Handle labels: send nil when empty to clear labels in CM (TFIN-506)
+	if len(plan.Labels.Elements()) == 0 {
+		payload.Labels = nil
+	} else {
+		labelsPayload := make(map[string]interface{})
+		for k, v := range plan.Labels.Elements() {
+			labelsPayload[k] = v.(types.String).ValueString()
+		}
+		payload.Labels = labelsPayload
 	}
-	payload.Labels = labelsPayload
 
 	payloadJSON, err := json.Marshal(payload)
 	if err != nil {
