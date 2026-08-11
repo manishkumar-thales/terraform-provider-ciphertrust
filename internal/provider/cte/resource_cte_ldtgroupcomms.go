@@ -156,7 +156,10 @@ func (r *resourceLDTGroupCommSvc) Read(ctx context.Context, req resource.ReadReq
 
 	// Fetch LDT group details
 	response, err := r.client.GetById(ctx, id, state.ID.ValueString(), common.URL_LDT_GROUP_COMM_SVC)
-	if handleReadNotFound(ctx, err, "CTE LDT Group Communication Service ("+state.ID.ValueString()+")", &resp.Diagnostics) {
+	// TFIN-609: genuinely-missing (404) must remove from state so the next
+	// plan proposes recreation, matching the sibling policy-rule resources
+	// (data_tx_rule/key_rule/security_rule, TFIN-168).
+	if handleReadNotFoundRecreate(ctx, err, "CTE LDT Group Communication Service ("+state.ID.ValueString()+")", resp) {
 		return
 	}
 

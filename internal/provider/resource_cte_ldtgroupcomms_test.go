@@ -129,3 +129,36 @@ func TestCTELDTGroupCommResource_drift(t *testing.T) {
 		},
 	})
 }
+
+// TestCTELDTGroupCommResource_oobDelete verifies that deleting the LDT group
+// communication service out-of-band on CipherTrust Manager causes the next
+// plan to propose recreation (Create), rather than the false "No changes"
+// convergence fixed by TFIN-609.
+func TestCTELDTGroupCommResource_oobDelete(t *testing.T) {
+	name := "tf-ldtgc-oobdel-" + uuid.New().String()[:8]
+	const rn = "ciphertrust_cte_ldtgroupcomms.ldt"
+	var capturedID string
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: cteLDTGroupCommsConfig(name, "OOB delete original"),
+				Check: checkStep(t, "ldtgroupcomms oob delete: create",
+					cteCaptureID(rn, &capturedID),
+				),
+			},
+			{
+				PreConfig: func() {
+					cteOutOfBandDelete(common.URL_LDT_GROUP_COMM_SVC, capturedID)
+				},
+				Config: cteLDTGroupCommsConfig(name, "OOB delete original"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(rn, plancheck.ResourceActionCreate),
+					},
+				},
+			},
+		},
+	})
+}

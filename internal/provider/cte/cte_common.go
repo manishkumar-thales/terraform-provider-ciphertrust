@@ -6,6 +6,7 @@ import (
 	"strings"
 
 	"github.com/hashicorp/terraform-plugin-framework/diag"
+	"github.com/hashicorp/terraform-plugin-framework/resource"
 	"github.com/hashicorp/terraform-plugin-framework/types"
 )
 
@@ -91,6 +92,44 @@ func handleReadNotFound(ctx context.Context, err error, resourceLabel string, di
 		return true
 	}
 	diags.AddError(
+		fmt.Sprintf("Error reading %s", resourceLabel),
+		err.Error(),
+	)
+	return true
+}
+
+// handleReadNotFoundRecreate centralizes CTE resource Read() 404 handling
+// for the CTE policy family (cte_policy, cte_signature_set,
+// cte_ldtgroupcomms), where TFIN-168 established that a genuinely-missing
+// resource must remove itself from state so the next plan proposes
+// recreation, matching the sibling policy-rule resources
+// (cte_policy_data_tx_rule, cte_policy_key_rule, cte_policy_security_rule)
+// which already do this via a direct "response == ''" RemoveResource check
+// in their own Read(). TFIN-609 found cte_policy, cte_signature_set, and
+// cte_ldtgroupcomms had regressed to (or never migrated off of) the general
+// conservative-on-404 behavior in handleReadNotFound, causing a false "No
+// changes" convergence when the resource was deleted out-of-band.
+//
+// This is a deliberate, scoped exception to the general
+// keep-in-state-on-404 convention (commit 43f3b14, TFIN-185): that
+// convention still applies to every other CTE resource using
+// handleReadNotFound. Only call this for the three policy-family resources
+// above.
+//
+// On err == nil it does nothing and returns false (caller proceeds
+// normally). On a genuine (non-404) error it adds a diagnostic error and
+// returns true. On a 404 specifically it removes the resource from state
+// (no error/warning added, matching the sibling rule resources' silent
+// RemoveResource behavior) and returns true.
+func handleReadNotFoundRecreate(ctx context.Context, err error, resourceLabel string, resp *resource.ReadResponse) bool {
+	if err == nil {
+		return false
+	}
+	if strings.Contains(err.Error(), "status: 404") {
+		resp.State.RemoveResource(ctx)
+		return true
+	}
+	resp.Diagnostics.AddError(
 		fmt.Sprintf("Error reading %s", resourceLabel),
 		err.Error(),
 	)

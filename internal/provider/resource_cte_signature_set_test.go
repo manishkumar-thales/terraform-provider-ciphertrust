@@ -8,6 +8,7 @@ import (
 	"github.com/ThalesGroup/terraform-provider-ciphertrust/internal/provider/common"
 	"github.com/google/uuid"
 	"github.com/hashicorp/terraform-plugin-testing/helper/resource"
+	"github.com/hashicorp/terraform-plugin-testing/plancheck"
 )
 
 // cteSignatureSetConfig renders a ciphertrust_cte_signature_set. type is held
@@ -151,6 +152,39 @@ func TestCTESignatureSetResource_drift(t *testing.T) {
 				Config:             cteSignatureSetConfig(name, "Drift original", false),
 				PlanOnly:           true,
 				ExpectNonEmptyPlan: true,
+			},
+		},
+	})
+}
+
+// TestCTESignatureSetResource_oobDelete verifies that deleting the signature
+// set out-of-band on CipherTrust Manager causes the next plan to propose
+// recreation (Create), rather than the false "No changes" convergence fixed
+// by TFIN-609.
+func TestCTESignatureSetResource_oobDelete(t *testing.T) {
+	name := "tf-sigset-oobdel-" + uuid.New().String()[:8]
+	var capturedID string
+	const rn = "ciphertrust_cte_signature_set.signature_set"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: cteSignatureSetConfig(name, "OOB delete original", false),
+				Check: checkStep(t, "signature_set oob delete: create",
+					cteCaptureID(rn, &capturedID),
+				),
+			},
+			{
+				PreConfig: func() {
+					cteOutOfBandDelete(common.URL_CTE_SIGNATURE_SET, capturedID)
+				},
+				Config: cteSignatureSetConfig(name, "OOB delete original", false),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(rn, plancheck.ResourceActionCreate),
+					},
+				},
 			},
 		},
 	})

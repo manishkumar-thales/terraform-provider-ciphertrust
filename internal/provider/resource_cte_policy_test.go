@@ -142,6 +142,39 @@ func TestCTEPolicyResource_drift(t *testing.T) {
 	})
 }
 
+// TestCTEPolicyResource_oobDelete verifies that deleting the policy
+// out-of-band on CipherTrust Manager causes the next plan to propose
+// recreation (Create), rather than the false "No changes" convergence fixed
+// by TFIN-609.
+func TestCTEPolicyResource_oobDelete(t *testing.T) {
+	name := "tf-policy-oobdel-" + uuid.New().String()[:8]
+	var capturedID string
+	const rn = "ciphertrust_cte_policy.cte_policy"
+
+	resource.Test(t, resource.TestCase{
+		ProtoV6ProviderFactories: testAccProtoV6ProviderFactories,
+		Steps: []resource.TestStep{
+			{
+				Config: cteStandardPolicyConfig(name, "OOB delete original", "all_ops"),
+				Check: checkStep(t, "policy oob delete: create",
+					cteCaptureID(rn, &capturedID),
+				),
+			},
+			{
+				PreConfig: func() {
+					cteOutOfBandDelete(common.URL_CTE_POLICY, capturedID)
+				},
+				Config: cteStandardPolicyConfig(name, "OOB delete original", "all_ops"),
+				ConfigPlanChecks: resource.ConfigPlanChecks{
+					PreApply: []plancheck.PlanCheck{
+						plancheck.ExpectResourceAction(rn, plancheck.ResourceActionCreate),
+					},
+				},
+			},
+		},
+	})
+}
+
 // ctePolicyTypedConfig renders a policy with an explicit policy_type, used by the
 // policy_type-immutability test.
 func ctePolicyTypedConfig(name, policyType string) string {
